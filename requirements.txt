@@ -1,0 +1,42 @@
+# ── Finance AI News & Trend Monitoring Platform ──────────────────────────────
+# Python 3.11+  |  pip install -r requirements.txt
+
+# ── Web scraping ──────────────────────────────────────────────────────────────
+scrapy==2.11.2
+twisted==23.10.0
+scrapy-user-agents==0.1.1
+beautifulsoup4==4.12.3
+lxml==5.2.2
+itemadapter==0.9.0
+python-dateutil==2.9.0
+
+# ── Selenium & browser automation ────────────────────────────────────────────
+selenium==4.21.0
+undetected-chromedriver==3.5.5
+webdriver-manager==4.0.1
+
+# ── Database ──────────────────────────────────────────────────────────────────
+psycopg2-binary==2.9.9
+SQLAlchemy>=1.4.0,<2.0.0
+
+# ── AI / OpenAI ───────────────────────────────────────────────────────────────
+openai==1.35.3
+
+# ── Airflow (installed separately; listed here for reference) ─────────────────
+# apache-airflow==2.8.1   # install via: pip install apache-airflow==2.8.1
+
+# ── Streamlit dashboard ───────────────────────────────────────────────────────
+streamlit==1.35.0
+plotly==5.22.0
+pandas==2.2.2
+numpy==1.26.4
+
+# ── HTTP / requests ───────────────────────────────────────────────────────────
+requests==2.32.3
+httpx==0.27.0
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+python-dotenv==1.0.1
+pydantic==2.7.4
+tenacity==8.3.0
+schedule==1.2.2

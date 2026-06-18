@@ -1,0 +1,201 @@
+# ── Finance AI News & Trend Monitoring Platform ─────────────────────────────
+# docker-compose up --build
+# ─────────────────────────────────────────────────────────────────────────────
+
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile.airflow
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow_user:airflow_pass@postgres/airflow_db
+    AIRFLOW__CORE__FERNET_KEY: ""
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+    AIRFLOW__WEBSERVER__SECRET_KEY: "finance_monitor_secret_2024"
+    PYTHONPATH: /opt/airflow/project
+    # App env vars
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: "5432"
+    POSTGRES_DB: finance_monitor
+    POSTGRES_USER: finance_user
+    POSTGRES_PASSWORD: finance_pass
+    OPENAI_API_KEY: ${OPENAI_API_KEY}
+    OPENAI_MODEL: gpt-4o-mini
+    N8N_WEBHOOK_BASE: http://n8n:5678/webhook
+    BREAKING_IMPACT_THRESHOLD: "70"
+    BREAKING_SENTIMENT_THRESHOLD: "0.7"
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+    - ./airflow/plugins:/opt/airflow/plugins
+    - .:/opt/airflow/project            # mount entire project
+    - airflow_data:/opt/airflow/data
+  depends_on:
+    postgres:
+      condition: service_healthy
+  networks:
+    - finance_net
+
+services:
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: finance_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_root
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sh:/docker-entrypoint-initdb.d/init_db.sh
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - finance_net
+
+  # ── Airflow: DB Init ────────────────────────────────────────────────────────
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow_init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        pip install -r /opt/airflow/project/requirements.txt --quiet
+        airflow db init
+        airflow users create \
+          --username admin \
+          --firstname Finance \
+          --lastname Monitor \
+          --role Admin \
+          --email admin@financemonitor.io \
+          --password admin123 || true
+        echo "Airflow init complete"
+    restart: "no"
+
+  # ── Airflow: Webserver ──────────────────────────────────────────────────────
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow_webserver
+    command: bash -c "pip install -r /opt/airflow/project/requirements.txt --quiet && exec airflow webserver"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # ── Airflow: Scheduler ──────────────────────────────────────────────────────
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow_scheduler
+    command: bash -c "pip install -r /opt/airflow/project/requirements.txt --quiet && exec airflow scheduler"
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # ── Streamlit Dashboard ─────────────────────────────────────────────────────
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: finance_streamlit
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: finance_monitor
+      POSTGRES_USER: finance_user
+      POSTGRES_PASSWORD: finance_pass
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    ports:
+      - "8501:8501"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - finance_net
+    restart: unless-stopped
+
+  # ── n8n Workflow Automation ─────────────────────────────────────────────────
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: finance_n8n
+    environment:
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: admin
+      N8N_BASIC_AUTH_PASSWORD: admin123
+      N8N_HOST: 0.0.0.0
+      N8N_PORT: "5678"
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: http://localhost:5678/
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: "5432"
+      DB_POSTGRESDB_DATABASE: n8n_db
+      DB_POSTGRESDB_USER: n8n_user
+      DB_POSTGRESDB_PASSWORD: n8n_pass
+      # SMTP — fill in your provider
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-noreply@financemonitor.io}
+      N8N_EMAIL_MODE: smtp
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n_workflows:/home/node/workflows   # auto-import on startup
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - finance_net
+    restart: unless-stopped
+
+  # ── pgAdmin (optional, comment out in production) ───────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: finance_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@financemonitor.io
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - finance_net
+    profiles:
+      - dev   # only starts with: docker-compose --profile dev up
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  airflow_data:
+  n8n_data:
+
+networks:
+  finance_net:
+    driver: bridge
