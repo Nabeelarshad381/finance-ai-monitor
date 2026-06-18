@@ -1,0 +1,78 @@
+{
+  "id": "FwwlE3TfHehlGUVl",
+  "name": "Finance Breaking News Alert",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "breaking-news",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "breaking-news"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst articles = body.articles || [];\nconst expertName = body.expert_name;\nconst expertEmail = body.expert_email;\n\n// Build HTML table of breaking articles\nlet rows = articles.map(a => `\n  <tr style='border-bottom:1px solid #eee'>\n    <td style='padding:8px'><a href='${a.source_url}'>${a.headline}</a></td>\n    <td style='padding:8px'>${a.source}</td>\n    <td style='padding:8px;font-weight:bold;color:${a.sentiment_label==='POSITIVE'?'green':a.sentiment_label==='NEGATIVE'?'red':'gray'}'>${a.sentiment_label}</td>\n    <td style='padding:8px'>${a.market_direction}</td>\n    <td style='padding:8px'>${Math.round(a.market_impact_score)}/100</td>\n  </tr>`).join('');\n\nconst html = `<html><body style='font-family:Arial,sans-serif'>\n<h2 style='color:#c0392b'>🚨 Breaking Finance News Alert</h2>\n<p>Dear ${expertName},</p>\n<p>High-impact financial news has been detected:</p>\n<table width='100%' cellpadding='0' cellspacing='0' style='border-collapse:collapse'>\n  <thead><tr style='background:#2c3e50;color:white'>\n    <th style='padding:10px;text-align:left'>Headline</th>\n    <th style='padding:10px'>Source</th>\n    <th style='padding:10px'>Sentiment</th>\n    <th style='padding:10px'>Direction</th>\n    <th style='padding:10px'>Impact</th>\n  </tr></thead>\n  <tbody>${rows}</tbody>\n</table>\n<br><p style='color:#777;font-size:12px'>Finance Monitor Platform — Automated Alert</p>\n</body></html>`;\n\nreturn [{ json: { expertEmail, expertName, html, subject: `🚨 Breaking: ${articles[0]?.headline?.substring(0,60)}...` } }];"
+      },
+      "id": "format-email",
+      "name": "Format Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{$env.SMTP_FROM_EMAIL}}",
+        "toEmail": "={{$json.expertEmail}}",
+        "subject": "={{$json.subject}}",
+        "emailType": "html",
+        "html": "={{$json.html}}",
+        "options": {
+          "allowUnauthorizedCerts": false
+        }
+      },
+      "id": "send-email",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credentials",
+          "name": "SMTP Credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\": \"sent\", \"to\": \"{{$('format-email').item.json.expertEmail}}\"}"
+      },
+      "id": "webhook-response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [[ { "node": "Format Email", "type": "main", "index": 0 } ]]
+    },
+    "Format Email": {
+      "main": [[ { "node": "Send Email", "type": "main", "index": 0 } ]]
+    },
+    "Send Email": {
+      "main": [[ { "node": "Webhook Response", "type": "main", "index": 0 } ]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

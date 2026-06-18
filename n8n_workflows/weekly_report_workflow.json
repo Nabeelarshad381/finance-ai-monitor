@@ -1,0 +1,69 @@
+{
+  "id": "HsahrmZHDJOCkVPl",
+  "name": "Finance Weekly Report",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "weekly-report",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-weekly",
+      "name": "Webhook - Weekly Report",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "weekly-report"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst { expert_name, expert_email, by_source, weekly_trends, week_ending } = body;\n\nconst sourceRows = (by_source || []).map(s => `\n  <tr style='border-bottom:1px solid #eee'>\n    <td style='padding:8px'>${s.source}</td>\n    <td style='padding:8px;text-align:center'>${s.articles}</td>\n    <td style='padding:8px;text-align:center;color:${parseFloat(s.avg_sentiment)>0?'#27ae60':'#e74c3c'}'>${parseFloat(s.avg_sentiment||0).toFixed(2)}</td>\n    <td style='padding:8px;text-align:center;color:#27ae60'>🐂 ${s.bullish}</td>\n    <td style='padding:8px;text-align:center;color:#e74c3c'>🐻 ${s.bearish}</td>\n  </tr>`).join('');\n\nconst trendRows = (weekly_trends || []).map((t,i) => `\n  <tr style='border-bottom:1px solid #eee'>\n    <td style='padding:8px'>#${i+1}</td>\n    <td style='padding:8px'><strong>${t.topic}</strong></td>\n    <td style='padding:8px'>${t.total_mentions}</td>\n    <td style='padding:8px;color:${parseFloat(t.avg_sentiment)>0?'#27ae60':'#e74c3c'}'>${parseFloat(t.avg_sentiment||0).toFixed(2)}</td>\n  </tr>`).join('');\n\nconst html = `<html><body style='font-family:Arial,sans-serif;max-width:800px;margin:0 auto'>\n<div style='background:#1a1a2e;color:white;padding:25px;border-radius:8px 8px 0 0'>\n  <h1 style='margin:0'>📋 Weekly Finance Intelligence Report</h1>\n  <p style='color:#aaa;margin:5px 0'>Week ending: ${week_ending} | Finance Monitor Platform</p>\n</div>\n<div style='padding:25px;background:#f9f9f9'>\n<p>Dear <strong>${expert_name}</strong>,</p>\n<p>Here is your comprehensive weekly analysis of financial news coverage and market trends.</p>\n\n<h2 style='color:#2c3e50;border-bottom:2px solid #3498db;padding-bottom:8px'>📰 Coverage by Source</h2>\n<table width='100%' style='border-collapse:collapse;background:white;border-radius:8px'>\n  <thead>\n    <tr style='background:#2c3e50;color:white'>\n      <th style='padding:12px;text-align:left'>Source</th>\n      <th style='padding:12px'>Articles</th>\n      <th style='padding:12px'>Avg Sentiment</th>\n      <th style='padding:12px'>Bullish</th>\n      <th style='padding:12px'>Bearish</th>\n    </tr>\n  </thead>\n  <tbody>${sourceRows}</tbody>\n</table>\n\n<h2 style='color:#2c3e50;border-bottom:2px solid #9b59b6;padding-bottom:8px;margin-top:30px'>🔥 Top Weekly Trends</h2>\n<table width='100%' style='border-collapse:collapse;background:white;border-radius:8px'>\n  <thead>\n    <tr style='background:#8e44ad;color:white'>\n      <th style='padding:10px'>#</th>\n      <th style='padding:10px;text-align:left'>Topic</th>\n      <th style='padding:10px'>Mentions</th>\n      <th style='padding:10px'>Avg Sentiment</th>\n    </tr>\n  </thead>\n  <tbody>${trendRows}</tbody>\n</table>\n\n<div style='background:#eaf4fb;border-left:4px solid #3498db;padding:15px;margin-top:25px;border-radius:4px'>\n  <p style='margin:0'><strong>💡 Tip:</strong> Log in to the Finance Monitor dashboard for interactive charts and full article analysis.</p>\n</div>\n</div>\n<div style='background:#1a1a2e;color:#aaa;padding:12px;font-size:11px;text-align:center;border-radius:0 0 8px 8px'>\n  Finance Monitor Platform — Automated Weekly Intelligence Report\n</div>\n</body></html>`;\n\nreturn [{ json: { expert_email, html, subject: `📋 Weekly Finance Report — Week of ${week_ending}` } }];"
+      },
+      "id": "format-weekly",
+      "name": "Format Weekly Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{$env.SMTP_FROM_EMAIL}}",
+        "toEmail": "={{$json.expert_email}}",
+        "subject": "={{$json.subject}}",
+        "emailType": "html",
+        "html": "={{$json.html}}"
+      },
+      "id": "send-weekly-email",
+      "name": "Send Weekly Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "credentials": {
+        "smtp": { "id": "smtp-credentials", "name": "SMTP Credentials" }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"status\": \"sent\"}"
+      },
+      "id": "weekly-response",
+      "name": "Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Weekly Report": {
+      "main": [[ { "node": "Format Weekly Email", "type": "main", "index": 0 } ]]
+    },
+    "Format Weekly Email": {
+      "main": [[ { "node": "Send Weekly Email", "type": "main", "index": 0 } ]]
+    },
+    "Send Weekly Email": {
+      "main": [[ { "node": "Response", "type": "main", "index": 0 } ]]
+    }
+  }
+}
