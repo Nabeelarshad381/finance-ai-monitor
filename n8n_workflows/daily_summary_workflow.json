@@ -1,0 +1,69 @@
+{
+  "id": "SRY8AQa9sIAF0QVC",
+  "name": "Finance Daily Summary",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "daily-summary",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-daily",
+      "name": "Webhook - Daily Summary",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "daily-summary"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst { expert_name, expert_email, stats, top_stories, trending, date } = body;\n\nconst sentimentBar = (s) => {\n  const pct = Math.round((parseFloat(s?.avg_sentiment || 0) + 1) / 2 * 100);\n  return `<div style='background:#eee;border-radius:4px;height:10px;width:200px'><div style='background:${pct>55?'#27ae60':pct<45?'#e74c3c':'#f39c12'};width:${pct}%;height:10px;border-radius:4px'></div></div>`;\n};\n\nconst topRows = (top_stories || []).map(a => `\n  <tr style='border-bottom:1px solid #eee'>\n    <td style='padding:8px'><a href='${a.source_url}' style='color:#2980b9'>${a.headline?.substring(0,80)}...</a><br><small>${a.summary?.substring(0,120)}...</small></td>\n    <td style='padding:8px'>${a.source}</td>\n    <td style='padding:8px;color:${a.sentiment_label==='POSITIVE'?'#27ae60':a.sentiment_label==='NEGATIVE'?'#e74c3c':'#7f8c8d'}'>${a.sentiment_label}</td>\n    <td style='padding:8px'>${Math.round(a.market_impact_score)}</td>\n  </tr>`).join('');\n\nconst trendRows = (trending || []).map(t => `\n  <tr style='border-bottom:1px solid #f5f5f5'>\n    <td style='padding:6px'><strong>${t.topic}</strong></td>\n    <td style='padding:6px'>${t.topic_type}</td>\n    <td style='padding:6px'>${t.mention_count} mentions</td>\n    <td style='padding:6px'>${sentimentBar(t)}</td>\n  </tr>`).join('');\n\nconst html = `<html><body style='font-family:Arial,sans-serif;max-width:800px;margin:0 auto'>\n<div style='background:#2c3e50;color:white;padding:20px;border-radius:8px 8px 0 0'>\n  <h2>📊 Daily Finance Intelligence Report</h2>\n  <p>${date} | Finance Monitor Platform</p>\n</div>\n<div style='padding:20px;background:#f9f9f9'>\n<p>Dear ${expert_name},</p>\n\n<h3>📈 24-Hour Market Summary</h3>\n<table width='100%' style='background:white;border-radius:8px;padding:15px'>\n  <tr><td><strong>Total Articles</strong></td><td>${stats?.total_articles || 0}</td></tr>\n  <tr><td><strong>Positive Sentiment</strong></td><td style='color:#27ae60'>${stats?.positive_count || 0}</td></tr>\n  <tr><td><strong>Negative Sentiment</strong></td><td style='color:#e74c3c'>${stats?.negative_count || 0}</td></tr>\n  <tr><td><strong>Bullish Signals</strong></td><td style='color:#27ae60'>🐂 ${stats?.bullish_count || 0}</td></tr>\n  <tr><td><strong>Bearish Signals</strong></td><td style='color:#e74c3c'>🐻 ${stats?.bearish_count || 0}</td></tr>\n  <tr><td><strong>Avg Market Impact</strong></td><td>${Math.round(stats?.avg_impact || 0)}/100</td></tr>\n</table>\n\n<h3>🔥 Top Stories by Impact</h3>\n<table width='100%' cellspacing='0' style='border-collapse:collapse'>\n  <thead><tr style='background:#34495e;color:white'>\n    <th style='padding:10px;text-align:left'>Headline</th>\n    <th style='padding:10px'>Source</th>\n    <th style='padding:10px'>Sentiment</th>\n    <th style='padding:10px'>Impact</th>\n  </tr></thead>\n  <tbody>${topRows}</tbody>\n</table>\n\n<h3>📌 Trending Topics</h3>\n<table width='100%' cellspacing='0'>\n  <thead><tr style='background:#8e44ad;color:white'>\n    <th style='padding:8px;text-align:left'>Topic</th><th>Type</th><th>Mentions</th><th>Sentiment</th>\n  </tr></thead>\n  <tbody>${trendRows}</tbody>\n</table>\n</div>\n<div style='background:#2c3e50;color:#bdc3c7;padding:10px;font-size:11px;text-align:center;border-radius:0 0 8px 8px'>\n  Finance Monitor Platform — Automated Daily Intelligence Report\n</div>\n</body></html>`;\n\nreturn [{ json: { expert_email, expert_name, html, subject: `📊 Daily Finance Report — ${date}` } }];"
+      },
+      "id": "format-daily",
+      "name": "Format Daily Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{$env.SMTP_FROM_EMAIL}}",
+        "toEmail": "={{$json.expert_email}}",
+        "subject": "={{$json.subject}}",
+        "emailType": "html",
+        "html": "={{$json.html}}"
+      },
+      "id": "send-daily-email",
+      "name": "Send Daily Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "credentials": {
+        "smtp": { "id": "smtp-credentials", "name": "SMTP Credentials" }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"status\": \"sent\"}"
+      },
+      "id": "daily-response",
+      "name": "Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Daily Summary": {
+      "main": [[ { "node": "Format Daily Email", "type": "main", "index": 0 } ]]
+    },
+    "Format Daily Email": {
+      "main": [[ { "node": "Send Daily Email", "type": "main", "index": 0 } ]]
+    },
+    "Send Daily Email": {
+      "main": [[ { "node": "Response", "type": "main", "index": 0 } ]]
+    }
+  }
+}
