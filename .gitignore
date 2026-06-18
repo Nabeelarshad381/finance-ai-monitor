@@ -1,0 +1,85 @@
+# ── Finance AI Monitor — .gitignore ──────────────────────────────────────────
+
+# Environment & secrets — NEVER commit these
+.env
+.env.*
+!.env.example
+secrets/
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.Python
+pip-wheel-metadata/
+*.so
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+*.cover
+
+# Scrapy
+.scrapy/
+scrapy.log
+
+# Selenium / browser
+chromedriver
+geckodriver
+
+# Airflow
+airflow/logs/
+airflow/plugins/__pycache__/
+airflow.db
+airflow.cfg
+unittests.cfg
+
+# Streamlit
+.streamlit/
+
+# Docker volumes (data dirs if mounted locally)
+postgres_data/
+n8n_data/
+airflow_data/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+/tmp/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Node (n8n local dev)
+node_modules/
+npm-debug.log
+
+# Cache
+.cache/
+__pycache__/
+*.pyc
+.mypy_cache/
